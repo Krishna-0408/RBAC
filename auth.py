@@ -1,6 +1,4 @@
 from datetime import datetime, timedelta
-from jose import jwt
-from datetime import datetime, timedelta
 from jose import jwt, JWTError
 
 SECRET_KEY = "mysecretkey"
@@ -9,7 +7,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
 def create_access_token(data: dict):
-
     to_encode = data.copy()
 
     expire = datetime.utcnow() + timedelta(
@@ -18,13 +15,12 @@ def create_access_token(data: dict):
 
     to_encode.update({"exp": expire})
 
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode,
         SECRET_KEY,
         algorithm=ALGORITHM
     )
 
-    return encoded_jwt
 
 def verify_token(token: str):
     try:
@@ -40,6 +36,40 @@ def verify_token(token: str):
             return None
 
         return payload
+
+    except JWTError:
+        return None
+
+
+def create_email_token(email: str):
+    expire = datetime.utcnow() + timedelta(minutes=10)
+
+    data = {
+        "sub": email,
+        "exp": expire
+    }
+
+    return jwt.encode(
+        data,
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+
+
+def verify_email_token(token: str):
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM]
+        )
+
+        email = payload.get("sub")
+
+        if email is None:
+            return None
+
+        return email
 
     except JWTError:
         return None

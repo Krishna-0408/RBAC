@@ -9,7 +9,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False)
     password = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False)
-    is_verified = Column(Boolean, default=False)
+    
 
 class Item(Base):
     __tablename__ = "items"

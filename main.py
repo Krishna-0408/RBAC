@@ -5,7 +5,7 @@ from database import engine, get_db
 from models import Base, User
 from schemas import UserCreate, UserResponse
 from schemas import UserCreate, UserResponse, LoginRequest, Token
-from auth import create_access_token
+from auth import create_access_token, get_password_hash, verify_password
 from models import Item
 from schemas import ItemCreate
 from role_dependency import admin_required
@@ -37,10 +37,10 @@ def signup(
             status_code=400,
             detail="Email already exists"
         )
-
+    hashed_password = get_password_hash(user.password)
     new_user = User(
         email=user.email,
-        password=user.password,
+        password=hashed_password,
         role=user.role
     )
 
@@ -72,12 +72,13 @@ def login(user: LoginRequest,
             detail="Invalid Email"
         )
 
-    if db_user.password != user.password:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid Password"
-        )
 
+
+    if not verify_password(user.password, db_user.password):
+        raise HTTPException(
+        status_code=401,
+        detail="Invalid Password"
+    )
     access_token = create_access_token(
         data={
             "sub": db_user.email,

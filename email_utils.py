@@ -1,72 +1,63 @@
 import smtplib
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
 
 EMAIL="krishnaramasamy294@gmail.com"
 PASSWORD="myyj xghw kfsn cxsy"
 
 
-def send_verification_mail(email,token):
+def send_email(to_email: str, role: str):
 
-    verification_link = f"http://127.0.0.1:8000/verify-email?token={token}"
+    subject = "Registration Successful"
 
-    body = f"""
+    if role == "admin":
+        body = f"""
 Hello,
 
-Please verify your email.
+Welcome!
 
-Click below:
+You are registered successfully.
 
-{verification_link}
+Role : ADMIN
 
-Link expires in 10 minutes.
-"""
+You have full access to the application.
 
-    msg = MIMEText(body)
-    msg["Subject"]="Verify Email"
-
-    server=smtplib.SMTP("smtp.gmail.com",587)
-    server.starttls()
-    server.login(EMAIL,PASSWORD)
-
-    server.sendmail(
-        EMAIL,
-        email,
-        msg.as_string()
-    )
-
-    server.quit()
-def send_welcome_mail(email,role):
-
-    if role=="admin":
-
-        body="""
-Welcome
-
-You are registered as ADMIN.
-
-You have full access.
+Thank you.
 """
 
     else:
+        body = f"""
+Hello,
 
-        body="""
-Welcome
+Welcome!
 
-You are registered as USER.
+You are registered successfully.
 
-You have limited access.
+Role : USER
+
+You have limited access to the application.
+
+Thank you.
 """
 
-    msg = MIMEText(body)
-    msg["Subject"]="Registration Successful"
+    msg = MIMEMultipart()
+    msg["From"] = EMAIL
+    msg["To"] = to_email
+    msg["Subject"] = subject
 
-    server=smtplib.SMTP("smtp.gmail.com",587)
+    msg.attach(MIMEText(body, "plain"))
+
+    server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
     server.starttls()
-    server.login(EMAIL,PASSWORD)
+    server.login(EMAIL, PASSWORD)
 
     server.sendmail(
         EMAIL,
-        email,
+        to_email,
         msg.as_string()
     )
 

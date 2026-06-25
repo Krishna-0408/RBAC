@@ -1,21 +1,16 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from dependencies import get_current_user
+from dependencies import get_current_user, blacklisted_tokens
 from database import engine, get_db
 from models import Base, User
 from schemas import UserCreate, UserResponse
 from schemas import UserCreate, UserResponse, LoginRequest, Token
-from auth import (
-    create_access_token,
-    create_email_token,
-    verify_email_token
-)
+from auth import create_access_token
 from models import Item
 from schemas import ItemCreate
 from role_dependency import admin_required
 from fastapi import BackgroundTasks
-from email_utils import send_verification_mail, send_welcome_mail
-
+from email_utils import send_email
 app = FastAPI()
 
 Base.metadata.create_all(bind=engine)
@@ -25,94 +20,42 @@ Base.metadata.create_all(bind=engine)
 def home():
     return {"message": "FastAPI RBAC Project"}
 
-from fastapi import BackgroundTasks
-
-temp_users = {}
 
 @app.post("/signup")
 def signup(
-    user: UserCreate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+        user: UserCreate,
+        background_tasks: BackgroundTasks,
+        db: Session = Depends(get_db)
 ):
 
-    token = create_email_token(user.email)
-
-    temp_users[user.email]={
-        "email":user.email,
-        "password":user.password,
-        "role":user.role
-    }
-
-    background_tasks.add_task(
-        send_verification_mail,
-        user.email,
-        token
-    )
-
-    return {
-        "message":"Verification email sent"
-    }
-
-@app.get("/verify-email")
-def verify_email(
-    token: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-
-    # Decode token
-    email = verify_email_token(token)
-
-    if email is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid or expired token"
-        )
-
-    # Check whether signup data exists
-    if email not in temp_users:
-        raise HTTPException(
-            status_code=404,
-            detail="User data not found. Please signup again."
-        )
-
-    data = temp_users[email]
-
-    # Prevent duplicate users
     existing_user = db.query(User).filter(
-        User.email == email
+        User.email == user.email
     ).first()
 
     if existing_user:
-        return {
-            "message": "User already verified"
-        }
+        raise HTTPException(
+            status_code=400,
+            detail="Email already exists"
+        )
 
-    # Save user to database
     new_user = User(
-        email=data["email"],
-        password=data["password"],
-        role=data["role"],
-        is_verified=True
+        email=user.email,
+        password=user.password,
+        role=user.role
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # Send welcome email
     background_tasks.add_task(
-        send_welcome_mail,
-        data["email"],
-        data["role"]
+        send_email,
+        user.email,
+        user.role
     )
 
-    # Remove temporary data
-    del temp_users[email]
-
     return {
-        "message": "Email verified successfully"
+        "message": "User created successfully"
     }
 
 @app.post("/login", response_model=Token)
@@ -155,12 +98,15 @@ def profile(current_user: User = Depends(get_current_user)):
         "role": current_user.role
     }
 
-@app.post("/logout")
-def logout():
+from fastapi import Header
 
-    return {
-        "message": "Logged out successfully"
-    }
+@app.post("/logout")
+def logout(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    blacklisted_tokens.add(token)
+
+    return {"message": "Logged out successfully"}
+    
 @app.get("/items")
 def get_items(
         db: Session = Depends(get_db),

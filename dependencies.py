@@ -10,11 +10,21 @@ oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="login"
 )
 
+# Add this
+blacklisted_tokens = set()
+
 
 def get_current_user(
         token: str = Depends(oauth2_scheme),
         db: Session = Depends(get_db)
 ):
+
+    # Add this
+    if token in blacklisted_tokens:
+        raise HTTPException(
+            status_code=401,
+            detail="Token has been revoked"
+        )
 
     payload = verify_token(token)
 

@@ -11,6 +11,8 @@ from schemas import ItemCreate
 from role_dependency import admin_required
 from fastapi import BackgroundTasks
 from email_utils import send_email
+from schemas import ResetPassword
+
 app = FastAPI()
 
 Base.metadata.create_all(bind=engine)
@@ -183,4 +185,44 @@ def delete_item(
 
     return {
         "message": "Deleted Successfully"
+    }
+
+@app.post("/reset-password")
+def reset_password(
+    passwords: ResetPassword,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    # Verify current password
+    if not verify_password(
+        passwords.current_password,
+        current_user.password
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Current password is incorrect"
+        )
+
+    # Check new password and confirm password
+    if passwords.new_password != passwords.confirm_password:
+        raise HTTPException(
+            status_code=400,
+            detail="New password and Confirm password do not match"
+        )
+
+    # Optional: Prevent using the same password
+    if verify_password(passwords.new_password, current_user.password):
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from current password"
+        )
+
+    # Hash the new password
+    current_user.password = get_password_hash(passwords.new_password)
+
+    db.commit()
+
+    return {
+        "message": "Password changed successfully"
     }

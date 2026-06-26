@@ -46,3 +46,19 @@ class ResetPassword(BaseModel):
     current_password: str
     new_password: str
     confirm_password: str
+
+from pydantic import EmailStr
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+
+class VerifyOTP(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class ChangePassword(BaseModel):
+    email: EmailStr
+    new_password: str
+    confirm_password: str

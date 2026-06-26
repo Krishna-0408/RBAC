@@ -226,3 +226,132 @@ def reset_password(
     return {
         "message": "Password changed successfully"
     }
+
+from datetime import datetime, timedelta
+import random
+
+from fastapi import BackgroundTasks
+
+from otp_store import otp_store
+from email_utils import send_otp_email
+
+from schemas import ForgotPassword, VerifyOTP, ChangePassword
+
+@app.post("/forgot-password")
+def forgot_password(
+        request: ForgotPassword,
+        background_tasks: BackgroundTasks,
+        db: Session = Depends(get_db)
+):
+
+    user = db.query(User).filter(
+        User.email == request.email
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="Email not found"
+        )
+
+    otp = str(random.randint(100000,999999))
+
+    otp_store[request.email] = {
+        "otp": otp,
+        "expires": datetime.now() + timedelta(minutes=5),
+        "verified": False
+    }
+
+    background_tasks.add_task(
+        send_otp_email,
+        request.email,
+        otp
+    )
+
+    return {
+        "message":"OTP sent successfully"
+    }
+
+@app.post("/verify-otp")
+def verify_otp(request: VerifyOTP):
+
+    data = otp_store.get(request.email)
+
+    if not data:
+        raise HTTPException(
+            status_code=400,
+            detail="OTP not found"
+        )
+
+    if datetime.now() > data["expires"]:
+        del otp_store[request.email]
+
+        raise HTTPException(
+            status_code=400,
+            detail="OTP expired"
+        )
+
+    if data["otp"] != request.otp:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OTP"
+        )
+
+    otp_store[request.email]["verified"] = True
+
+    return {
+        "message":"OTP Verified"
+    }
+
+@app.post("/change-password")
+def change_password(
+        request: ChangePassword,
+        db: Session = Depends(get_db)
+):
+
+    if request.new_password != request.confirm_password:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Passwords do not match"
+        )
+
+    data = otp_store.get(request.email)
+
+    if not data:
+
+        raise HTTPException(
+            status_code=400,
+            detail="OTP verification required"
+        )
+
+    if data["verified"] == False:
+
+        raise HTTPException(
+            status_code=400,
+            detail="OTP not verified"
+        )
+
+    user = db.query(User).filter(
+        User.email == request.email
+    ).first()
+
+    if not user:
+
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    user.password = get_password_hash(
+        request.new_password
+    )
+
+    db.commit()
+
+    del otp_store[request.email]
+
+    return {
+        "message":"Password changed successfully"
+    }
